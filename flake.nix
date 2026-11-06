@@ -26,6 +26,22 @@
           harfbuzz
           librsvg
         ]
+        # gnome-software's own backends and system-integration gems: each one
+        # is a GObject-Introspection loader over the typelib its README names.
+        # All of these come from this same nixpkgs, with the rest of gtkStack,
+        # so GIO's base types are registered exactly once — a typelib from a
+        # second glib build fails with `cannot register existing type
+        # 'GTlsCertificate'`.
+        ++ (with pkgs; [
+          appstream
+          flatpak
+          gnome-desktop
+          gnome-online-accounts
+          libgudev
+          packagekit
+          polkit
+          libsoup_3
+        ])
         # The Ruby `pkg-config` gem resolves `Requires.private` transitively and
         # hard-fails if any .pc in the chain is missing, so gtk4's whole private
         # closure has to be on PKG_CONFIG_PATH, not just its public deps.
@@ -72,12 +88,23 @@
           xorgproto
         ]);
 
+        # libxmlb and malcontent name an explicit non-default output in their
+        # README (`.lib`, not the package's default output) because that is
+        # where their typelib actually lives. These stay out of gtkStack's
+        # `.out`-normalising map below — `drv.out or drv` on an output
+        # derivation redirects back to the package's default output and the
+        # typelib vanishes — and are added to buildInputs/typelibPath as-is.
+        explicitOutputDeps = [
+          pkgs.libxmlb.lib
+          pkgs.malcontent.lib
+        ];
+
         # ruby-gnome gems build C extensions with extconf.rb + the pkg-config
         # gem; nixpkgs only ships gemConfig entries for the GTK3-era subset, so
         # the GTK4 gems get their build inputs declared here.
         rubyGnomeGem = _attrs: {
           nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = gtkStack;
+          buildInputs = gtkStack ++ explicitOutputDeps;
         };
 
         gemConfig = pkgs.defaultGemConfig // {
@@ -93,7 +120,8 @@
         # first output is `bin`, which carries no typelibs — hence the explicit
         # `.out`. at-spi2-core is here for the Atk typelib.
         typelibPath = pkgs.lib.makeSearchPath "lib/girepository-1.0"
-          (map (drv: drv.out or drv) (gtkStack ++ [ pkgs.at-spi2-core ]));
+          (map (drv: drv.out or drv) (gtkStack ++ [ pkgs.at-spi2-core ])
+            ++ explicitOutputDeps);
 
         # nix/ and not the repo root: the root Gemfile is kettle-jem's
         # development bundle — rubocop, rspec, yard, the kettle-dev stack — and
@@ -129,7 +157,7 @@
           # the wrapper never looks. The wrapper below is built by hand and
           # points at both the pre- and post-move paths.
           nativeBuildInputs = [ pkgs.makeWrapper ];
-          buildInputs = [ gems ] ++ gtkStack;
+          buildInputs = [ gems ] ++ gtkStack ++ explicitOutputDeps;
 
           dontBuild = true;
 
@@ -201,7 +229,7 @@
             pkgs.xvfb-run
             pkgs.gsettings-desktop-schemas
             pkgs.adwaita-icon-theme
-          ] ++ gtkStack;
+          ] ++ gtkStack ++ explicitOutputDeps;
 
           # Icons, GSettings schemas and the GTK portal all resolve through
           # XDG_DATA_DIRS; without these the window opens with blank icons.
