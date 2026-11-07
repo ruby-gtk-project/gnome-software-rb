@@ -2,9 +2,12 @@
 
 require_relative "settings"
 require_relative "common"
+require_relative "vendor"
+require_relative "language"
 require_relative "toast"
 require_relative "error_dialog"
 require_relative "shortcuts_dialog"
 require_relative "primary_menu"
+require_relative "lozenge"
 require_relative "page"
 require_relative "gnome_software/application"
