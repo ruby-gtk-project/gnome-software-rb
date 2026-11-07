@@ -9,12 +9,14 @@ require 'soup3'
 require 'malcontent'
 
 require_relative 'settings'
+require_relative 'language'
 
 # SystemInfo gathers the same kind of host diagnostics upstream's plugin
 # loader would collect from its backends at startup — an AppStream catalogue
 # size, the Flatpak installation's architecture, discovered hardware, the
-# PackageKit daemon's identity, an offline-update polkit permission and
-# review-server reachability — and renders them as the troubleshooting text
+# PackageKit daemon's identity, an offline-update polkit permission,
+# review-server reachability and the human-readable name of the current
+# locale's language — and renders them as the troubleshooting text
 # AdwAboutDialog#debug_info is built to hold (see lib/gnome_software/
 # application.rb's #about_dialog).
 #
@@ -36,6 +38,7 @@ module SystemInfo
       packagekit_line,
       polkit_line,
       review_server_line,
+      language_line,
       malcontent_line,
     ].join("\n")
   end
@@ -107,6 +110,22 @@ module SystemInfo
     "Review server: reachable (HTTP #{message.status_code})"
   rescue GLib::ErrorInfo => e
     "Review server: unreachable (#{e.message})"
+  end
+
+  # Mirrors gs_language_iso639_to_language() being used to turn a language
+  # code into a human name (see lib/language.rb, ported from upstream's
+  # src/gs-language.c): looks up the current locale's own ISO 639 code
+  # (the two letters LANG/LANGUAGE starts with) in the libxmlb-backed
+  # table, the same one upstream builds from iso-codes' iso_639.xml.
+  def language_line
+    code = (ENV['LANGUAGE'] || ENV['LANG'] || '').slice(0, 2).downcase
+    language = Language.new
+    if language.populate
+      name = language.iso639_to_language(code)
+      name ? "Current language: #{name} (#{code})" : "Current language: unknown code '#{code}'"
+    else
+      'Current language: unavailable (no iso_639.xml on this machine)'
+    end
   end
 
   # UNUSABLE: plugins/malcontent/gs-plugin-malcontent.c builds its

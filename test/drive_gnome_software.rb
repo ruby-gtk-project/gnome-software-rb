@@ -201,6 +201,19 @@ GtkDriver.drive(app_object, shots: SHOTS) do |d, app|
     app.window.visible_dialog&.close
   end
 
+  d.step('the About dialog\'s debug_info proves every backend gem actually ran (lib/system_info.rb)') do
+    debug_info = app.about_dialog.debug_info
+    d.check('debug_info is non-empty text, not nil') { !debug_info.nil? && !debug_info.empty? }
+    d.check('appstream gem ran: an "AppStream catalogue:" line is present') { debug_info.include?('AppStream catalogue:') }
+    d.check('flatpak gem ran: the Flatpak arch line names a real arch') { debug_info =~ /Flatpak arch: \S+ \(supports: .+\)/ }
+    d.check('gudev gem ran: a device count line is present') { debug_info =~ /Hardware devices detected: (unavailable|\d+)/ }
+    d.check('packagekit-glib gem ran: a PackageKit backend line is present') { debug_info.include?('PackageKit backend:') }
+    d.check('polkit gem ran: an offline-update permission line is present') { debug_info.include?('Offline-update permission:') }
+    d.check('soup3 gem ran: a review-server reachability line is present') { debug_info =~ /Review server: (reachable|unreachable)/ }
+    d.check('libxmlb gem ran (via Language): a current-language line is present') { debug_info.include?('Current language:') }
+    d.check('malcontent gem ran: a parental-controls line is present, documented as unusable here') { debug_info.include?('Parental controls:') }
+  end
+
   d.step('the window has no dialog left after closing About') do
     d.check('visible_dialog is nil again') { app.window.visible_dialog.nil? }
   end
