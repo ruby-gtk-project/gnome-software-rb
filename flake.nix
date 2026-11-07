@@ -35,8 +35,6 @@
         ++ (with pkgs; [
           appstream
           flatpak
-          gnome-desktop
-          gnome-online-accounts
           libgudev
           packagekit
           polkit

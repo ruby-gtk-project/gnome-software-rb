@@ -7,6 +7,7 @@ require_relative '../settings'
 require_relative '../common'
 require_relative '../primary_menu'
 require_relative '../shortcuts_dialog'
+require_relative '../system_info'
 
 module GnomeSoftware
   # The port's application shell, ported from upstream's src/gs-application.c
@@ -127,6 +128,7 @@ module GnomeSoftware
         about.issue_url = 'https://gitlab.gnome.org/GNOME/gnome-software/-/issues'
         about.copyright = 'Copyright © 2016–2026 GNOME Software contributors'
         about.license_type = Gtk::License::GPL_2_0
+        about.debug_info = SystemInfo.report
       end
     end
 

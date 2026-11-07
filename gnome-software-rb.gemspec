@@ -106,8 +106,6 @@ Gem::Specification.new do |spec|
   # the typelib each one needs at runtime).
   spec.add_dependency("appstream")       # AppStream — software metadata catalogue
   spec.add_dependency("flatpak")         # Flatpak — the Flatpak backend
-  spec.add_dependency("gnome_desktop")   # GnomeDesktop
-  spec.add_dependency("goa-rb")          # Goa — GNOME Online Accounts
   spec.add_dependency("gudev")           # GUdev — hardware device info
   spec.add_dependency("libxmlb")         # Xmlb — the AppStream silo backing store
   spec.add_dependency("malcontent")      # Malcontent — parental controls

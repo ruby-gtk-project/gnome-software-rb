@@ -129,28 +129,6 @@
     };
     version = "4.4.0";
   };
-  gnome_desktop = {
-    dependencies = ["gem_kit" "gobject-introspection"];
-    groups = ["default"];
-    platforms = [];
-    source = {
-      remotes = ["https://rubygems.org"];
-      sha256 = "1zn7mljvavjvwq11kprwfzmyycvni7178s0316q98hhk29l3hz9r";
-      type = "gem";
-    };
-    version = "1.0.0";
-  };
-  goa-rb = {
-    dependencies = ["gem_kit" "gobject-introspection"];
-    groups = ["default"];
-    platforms = [];
-    source = {
-      remotes = ["https://rubygems.org"];
-      sha256 = "0rdvzhd2hih0yg9mc7bzxl508yp573rsqlj056g6yahj099sps3h";
-      type = "gem";
-    };
-    version = "1.0.0";
-  };
   gobject-introspection = {
     dependencies = ["glib2"];
     groups = ["default"];
