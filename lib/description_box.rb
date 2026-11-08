@@ -48,8 +48,19 @@ class DescriptionBox < Gtk::Box
   # Recomputes the collapsed/expanded label content from the label's own
   # Pango layout. Safe to call before the widget has an allocation: with no
   # layout yet, the button is simply hidden until a real recalc happens.
+  #
+  # Deliberately does not touch `label.visible` on the empty-text path: the
+  # whole box is already hidden by #text= (`self.visible = !@text.nil?`), so
+  # hiding the label too is redundant -- and toggling a child's visibility
+  # off from inside its own parent's "realize" handler, before that child has
+  # ever been measured, leaves GTK's Pango layout cache for it permanently
+  # wrong (observed: the label's allocated width stays 0 forever after,
+  # even once real text and real space arrive). #recalculate runs on every
+  # "realize", and @text is nil on the very first one for any box built then
+  # populated later -- the normal order a real page uses -- so this path is
+  # not a corner case.
   def recalculate
-    return label.visible = false if @text.nil?
+    return if @text.nil?
 
     if @always_expanded
       button.visible = false
