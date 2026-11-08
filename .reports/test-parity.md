@@ -1,73 +1,122 @@
 # Test parity — gnome-software-rb vs origin/main
 
-Per `.claude/skills/test-parity`.
+Per `.claude/skills/test-parity`. Supersedes the prior round's
+`test-parity.md`, written when `drive_ok=false` and no `test/` directory
+existed. This round's gate: `drive_ok=true`, 108/108 checks, 17
+components.
 
 ## Upstream tests (origin/main)
 
-`git ls-tree -r --name-only origin/main | grep -i test` finds a substantial
-upstream test surface: `lib/gs-test.c/.h` (shared test harness),
-`lib/tests/{app-permissions,css,utils}.c`, `plugins/core/tests/core.c`,
-and a `tests/` C test per plugin (dpkg, dummy, eos-updater, epiphany,
-fedora-langpacks, flatpak [plus a large fixture tree], fwupd, modalias,
-packagekit, repos, rpm-ostree, snap, systemd-sysupdate), plus
-`tests/actions.py`, `tests/basic.py` and `tests/template.test.in` at the
-top level, run through `.gitlab-ci/run-tests.sh`.
+`git ls-tree -r --name-only origin/main | grep -i test` finds
+`lib/gs-test.c/.h` (shared test harness), `lib/tests/{app-permissions,css,
+utils}.c`, `plugins/core/tests/core.c`, a per-plugin `tests/` C test
+(dpkg, dummy, eos-updater, epiphany, fedora-langpacks, flatpak [plus a
+large fixture tree], fwupd, modalias, packagekit, repos, rpm-ostree, snap,
+systemd-sysupdate), and `tests/actions.py`, `tests/basic.py`,
+`tests/template.test.in` at top level, run through
+`.gitlab-ci/run-tests.sh`.
 
-## Port tests
+## Port tests — two separate surfaces, checked independently
 
-`find spec -type f` → `spec/README.md`, `spec/spec_helper.rb`. **Zero spec
-files exist.** `spec/README.md` documents the `kettle-test` harness helpers
-available *to future specs* but contains no examples itself. `find test
--type f` → nothing; there is no `test/` directory at all.
+### 1. `test/drive_*.rb` — exists now, runs, passes
 
-`grep -rn 'drive_\|test/drive' .` and a direct `find . -iname 'drive*'`
-both return nothing outside the nix flake's own echoed instructions
-(`flake.nix` prints `"drive the app: xvfb-run ruby test/drive_*.rb"` as
-*guidance for a file that does not exist yet*).
+`test/drive_gnome_software.rb` (283 lines) and `test/drive_new_widgets.rb`
+(184 lines) exist and were run directly this round under
+`nix develop --command xvfb-run -a ruby test/drive_*.rb`:
 
-## Runtime gate cross-check
+- `drive_gnome_software.rb`: **75 of 75 checks passed**, covering the
+  window, header bar, primary menu, `app.about`/`app.shortcuts`/`app.quit`
+  wiring, the About dialog (incl. every `system_info.rb` backend line),
+  the Shortcuts dialog's 4 sections, `Lozenge`'s icon/text-face switching,
+  and `ErrorDialog`'s copy-button wiring.
+- `drive_new_widgets.rb`: **33 of 33 checks passed**, covering
+  `ProgressButton`, `ContextDialogRow`, `UpdatesPausedBanner`, `ReviewBar`,
+  `DescriptionBox`.
+- Combined: **108 of 108, 0 failed** — matches the round's stated gate
+  exactly; I reproduced it independently rather than trusting the number.
+- **But**: both scripts print `RuntimeError: widget produced no render
+  node (not realised yet?)` at 4 separate screenshot steps (`02-about-dialog`,
+  `05-updates-paused-single`, `07-description-box-expanded`, and one more
+  implicit in the stderr) and continue past them without incrementing the
+  failure count. These are real runtime errors against real widgets, not
+  script bugs — see `accountability-ensurance.md`. The "0 failed" headline
+  is accurate for what the scripts count as a check, but a widget that
+  cannot be rendered to a screenshot is evidence of a GTK-realization bug
+  the gate is structurally unable to report as a failure.
+- Coverage: 108 checks cover exactly the **17 files** that exist in `lib/`
+  (18 minus the version file) — i.e. 100% of what's ported is driven, 0%
+  of what isn't ported (55 of 70 upstream components) has any check,
+  because there is no code for a check to exercise. A "component covered"
+  count of 17 is therefore not evidence the app works; it's evidence the
+  app's unported 79% majority is, trivially, untested by omission.
 
-This round's gate: `drive_ok=false`, 0 checks passed, 0 failed, 0
-components covered. That is not a flaky or partial run — it is the
-necessary result of there being no `test/drive_*.rb` file and no
-`spec/*_spec.rb` file in the repository at all. There is nothing to
-execute. I confirmed this directly rather than taking the gate's number on
-faith: `find spec test -type f` and the `drive*` search above both came up
-empty, and `ruby -e 'require "rspec/core"; exit RSpec::Core::Runner.run(...)'`
-(the exact command the dev-shell banner names) would run RSpec against an
-empty `spec/` with no examples — a green exit with 0 examples, which is the
-textbook false-positive this skill exists to catch.
+### 2. `spec/*_spec.rb` — RSpec harness, still completely absent and non-functional
+
+`find spec -type f` → only `spec/README.md` and `spec/spec_helper.rb`.
+**Zero `_spec.rb` files exist.** Worse than "empty": I ran the exact
+command the dev-shell banner prescribes —
+
+```
+ruby -e 'require "rspec/core"; exit RSpec::Core::Runner.run(["--format","progress","--require","spec_helper","spec"])'
+```
+
+— inside `nix develop` (plain and via `bundle exec`) and both fail before
+reaching "no examples":
+
+```
+Failure/Error: require "kettle/test/rspec"
+LoadError:
+  cannot load such file -- kettle/test/rspec
+...
+0 examples, 0 failures, 2 errors occurred outside of examples
+```
+
+`spec/spec_helper.rb` requires a gem (`kettle-test`, declared only as a
+development dependency in the gemspec) that is not resolvable in the dev
+shell as configured. This is a second, independent gap from "no spec
+files exist": even an agent who wrote specs today could not run them with
+the commands this repo documents, because the harness itself does not
+load. Neither `test-parity.md` nor any other report before this round
+flagged that the *documented* run command is broken, only that no specs
+exist — that is itself a finding (see `accountability-ensurance.md`).
 
 ## Finding
 
-**0 of the upstream test files have a Ruby equivalent. 0% test parity.**
-This is not "the suite needs work" — there is no suite. No `lib/*.rb` file
-in the port has ever been exercised by an automated check: not
-`common.rb`'s date/size formatting, not `settings.rb`'s JSON persistence
-and generated accessor methods, not `error_dialog.rb`'s clipboard copy, not
-`primary_menu.rb`'s menu structure, not `application.rb`'s action wiring.
-Every one of those is unverified-by-construction, independent of whether
-the code is correct.
+- **0 of the upstream C/Python test files have a Ruby equivalent.**
+  `common.rb`'s date/size formatting, `settings.rb`'s JSON persistence and
+  generated accessor methods, and every piece of pure logic in `lib/` has
+  no unit-level spec.
+- The 108 `drive_*.rb` checks are real, executed, and passing — this is
+  genuine progress over the prior round's `drive_ok=false` and should be
+  credited as such — but they are integration/smoke checks for widgets in
+  isolation, not unit tests, and they cover only the 21% of upstream
+  components that have been ported.
+- The RSpec harness (`spec/`) remains unusable, and is now additionally
+  confirmed *broken*, not just empty.
 
 ## Severity
 
-This is the single largest gap of the five reports. A component can be
-"ported" in the sense of existing as a `.rb` file and still be completely
-unverified; `component-parity.md` already flags behavioral gaps by reading
-the code, but reading code is not testing it, and nothing here lets any
-future agent trust that `lib/settings.rb`'s generated `DEFAULTS.each_key`
-accessor methods, for one concrete example, actually produce the right
-method names for every key (`'auth.account-id'` → `auth_account_id` is
-exercised nowhere).
+Two gaps, different shapes:
+1. **Breadth gap** — the drive scripts can only ever cover what is
+   ported; 79% of upstream components (55 of 70 stems) have zero
+   automated coverage of any kind, by construction, until they are
+   written.
+2. **Harness gap** — even for code that is ported, the unit-test path
+   (`spec/`) does not run at all right now, for a reason (`LoadError`)
+   nobody has recorded anywhere in `.reports/` before this round.
 
 ## Required fix
 
-1. Port at minimum `lib/tests/utils.c`'s equivalent assertions (time
-   formatting, size formatting) as `spec/common_spec.rb`.
-2. Add `spec/settings_spec.rb` covering persistence round-trip and the
-   generated accessor methods, including the boolean `?` predicates.
-3. Add a `test/drive_gnome_software.rb` that launches the app under
-   `xvfb-run` and asserts the window/menu/shortcuts-dialog build without
-   raising, so the runtime gate has something to execute at all.
-4. Re-run the gate after (3) exists; until then, `drive_ok=false` is
-   correct and must not be reported as anything else.
+1. Fix `spec/spec_helper.rb`'s `kettle/test/rspec` load path, or document
+   in `spec/README.md` that the harness is currently broken and how to
+   restore it (`bundle install` with a lockfile that resolves `kettle-test`,
+   if that's the actual missing step — not verified here, only that the
+   documented command fails as given).
+2. Once loadable, add unit specs for `common.rb` and `settings.rb` before
+   adding more `lib/` files, so pure logic stops being proven only by
+   integration smoke tests.
+3. Make the drive scripts fail (increment the failure counter, not just
+   print to stderr) when a screenshot step raises, so a real render bug
+   cannot pass the gate silently — see the 4 `RuntimeError`s noted above.
+4. Continue extending `test/drive_*.rb` alongside each new `lib/` file, as
+   happened correctly this round for the 5 new widgets.

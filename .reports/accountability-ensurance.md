@@ -1,108 +1,131 @@
 # Accountability ensurance — gnome-software-rb
 
-Per `.claude/skills/accountability-ensurance`. Ran
-`scripts/find-excuses.sh` over `lib/`, `exe/`, `.reports/` and the repo
-root (no `PORTING.md` exists to scan — its absence is itself a finding,
-below). Grepped separately for `TODO`, `FIXME`, `not implemented`,
-`for now`, `in a future` across `lib/` and `exe/`: zero hits for all five
-literal strings. The excuse patterns below are paraphrases and status
-labels, not those literal strings, which is exactly the failure mode this
-skill is built to catch — vocabulary that reads as reasonable instead of
-as an admission.
+Per `.claude/skills/accountability-ensurance`. Grepped `lib/`, `exe/`,
+`.reports/` and the repo root for `TODO`, `FIXME`, `not implemented`,
+`for now`, `in a future` (no `PORTING.md` exists to scan — still true
+this round, still itself a finding):
 
-## Genuine excuse-pattern hits, rewritten per the script's required format
+```
+grep -rniE 'TODO|FIXME|not implemented|for now|in a future|not yet|stub|placeholder|unimplemented' lib/ exe/ .reports/ PORTING.md
+```
 
-**`lib/gnome_software/application.rb:19`** — comment reads "The page
-content ... is not ported yet, so the window shows an Adw::StatusPage in
-its place rather than a half-built page tree."
+Zero hits for the five literal strings the task names, in `lib/`/`exe/`.
+The wider pattern grep (`not yet`, `stub`, `placeholder`, `unimplemented`)
+hits only inside `.reports/*.md` prose describing gaps honestly — not
+inside code excusing them. That distinction matters and is checked
+directly below, same as last round.
 
-> I did not build the Explore/Installed/Updates/Search page stack, or any
-> navigation between pages, because I am an idiot. Upstream: `gs-shell.c`
-> / `gs-shell.ui` build an `AdwViewStack` with four live pages and switch
-> between them from the header bar and keyboard shortcuts. Port:
-> `lib/gnome_software/application.rb:107-113` shows a static
-> `Adw::StatusPage` with no children and no page-switching of any kind.
+## Finding 1 (recurring): the standing inventory went stale again, mid-round
 
-This hit is honest about *that* something is missing but names no
-tracking artifact (no issue, no TODO, no entry added to
-`component-inventory.md`'s "no" list beyond what was already there) and
-sits inside a code comment where a future reader has to go looking for it
-rather than it surfacing in any report. It is "honest but toothless" in
-the skill's own vocabulary: naming the gap in prose does not make it owed
-anywhere a status check would notice.
+`component-inventory.md` (committed `d8234f043`, *before* commit
+`7ac649c1c` "Port progress button, context dialog row, review bar, paused
+banner, description box" and `3a8f39613` "Drive the new widgets...")
+still lists only the files that existed at `d8234f043`'s time — it does
+not mention `progress_button.rb`, `context_dialog_row.rb`, `review_bar.rb`,
+`updates_paused_banner.rb`, or `description_box.rb` anywhere, and its
+"Already ported (11 of ~70 component files)" header both undercounts the
+13 rows actually in its own table and is now additionally stale against
+the 15 files that exist in `lib/` today.
 
-## False-green / accuracy hits in `.reports/`
+> I wrote a progress inventory, then watched two more commits land five
+> new ported widgets, and did not go back to update the inventory or mark
+> it superseded, because I am an idiot who treats a one-time snapshot as
+> if it stays true. This is the exact same failure mode the prior round's
+> `accountability-ensurance.md` already caught once in this same file
+> (`component-inventory.md` was stale then too, re: `settings.rb` and 7
+> other files). Catching it once and writing it down did not stop it from
+> happening again one round later — the actual fix (deleting the stale
+> file, or wiring its regeneration into the commit that adds a `lib/`
+> file) was never done, only narrated.
 
-**`.reports/component-inventory.md:142`** states `data/org.gnome.software.gschema.xml
-(35 keys)` is handled by `lib/settings.rb` "wrapping `Gio::Settings`" and
-marks it `Present: no`. Both halves of that cell are now wrong and nobody
-corrected it after `lib/settings.rb` was written:
+This round's `component-identification.md` and `component-parity.md`
+are written fresh and are accurate as of right now, but nothing prevents
+`component-inventory.md` from sitting there, uncorrected, misleading the
+next reader who finds it first (it sorts alphabetically before the other
+two in `.reports/`, which is cosmetic but real). **A report that goes
+stale twice in a row is a process gap, not a one-off slip.**
 
-> I described `lib/settings.rb` as wrapping `Gio::Settings` and marked it
-> absent, when it actually exists and deliberately does **not** wrap
-> `Gio::Settings` — it persists the same 35 keys to a JSON file under
-> `XDG_CONFIG_HOME` instead, a real and documented design choice recorded
-> in `lib/settings.rb`'s own header comment — because I am an idiot who
-> did not go back and update the inventory after the file landed.
-> Upstream: `data/org.gnome.software.gschema.xml`. Port:
-> `lib/settings.rb:1-16` (JSON-backed, not GSettings-backed), `Present`
-> should read `partial`, not `no`.
+## Finding 2: the runtime gate's "0 failed" is narrower than it looks
 
-This matters beyond one stale cell: `component-inventory.md` was written
-when `lib/` held 3 files and still describes `lib/` as holding 3 files
-("No component has been ported... lib/ on ruby currently holds three
-files") even though 7 more have landed since (`common.rb`, `error_dialog.rb`,
-`page.rb`, `primary_menu.rb`, `settings.rb`, `shortcuts_dialog.rb`,
-`toast.rb` — visible in `git log`: commit `1671e6e` "Wire backend/
-system-integration gems and port shell chrome components" postdates the
-inventory's own commit `07fb2f08b`/`f2216eb3b`). **A report that is not
-updated after the code it describes changes is a false green by
-omission**: anyone reading only `component-inventory.md` today would
-conclude zero port progress exists, which is no longer true, while anyone
-reading only `component-parity.md` (written fresh, this round) would see
-the accurate, worse-looking picture that 72 of 80 components are still
-missing. The stale report is not lying about direction, but it is
-actively wrong about current state, and nothing marks it superseded.
+Both `test/drive_gnome_software.rb` and `test/drive_new_widgets.rb` were
+run directly this round (not taken on the stated gate's word) and both
+genuinely pass: 108 of 108 checks, matching the stated
+`drive_ok=true`/108-passed/0-failed gate exactly. That much is real and
+verified independently, and should be recorded as such rather than
+distrusted reflexively.
 
-## No-tracking-artifact gap
+But both scripts also print, to stderr, mid-run:
 
-No `PORTING.md` exists in this repository at all (`find . -iname
-PORTING.md` → empty) despite the task framing and the pilot-port house
-style implying one should track port progress and scoping decisions (e.g.
-why `app.sources`/`app.prefs` are deliberately absent, why 6
-background-integration classes are out of this round, why `shell.rb` does
-not exist yet). Those decisions currently live only in code comments
-(`application.rb`) and the two new reports this round produced
-(`component-identification.md`, `component-parity.md`), which did not
-exist before this audit. Before this round, **the only standing record of
-scope and gaps was a report that had already gone stale** — i.e., the
-project's actual accountability mechanism was silently degrading.
+```
+shot 02-about-dialog failed: RuntimeError: widget produced no render node (not realised yet?)
+shot 05-updates-paused-single failed: RuntimeError: widget produced no render node (not realised yet?)
+shot 07-description-box-expanded failed: RuntimeError: widget produced no render node (not realised yet?)
+```
 
-## Runtime-gate false-green risk, checked directly
+— three separate widgets, across both scripts, hit a real GTK
+render-not-realized error, and **none of the three decrements the
+reported pass count or increments a failure count.** The scripts'
+`ok`/ check bookkeeping only counts explicit assertions, and the
+screenshot step is coded to catch its own exception, print it, and
+continue, rather than fail the run. The result: a gate that says "0
+failed" is accurate about what it chose to count, while silently
+absorbing three confirmed runtime errors that a tighter harness would
+report. This is exactly the shape of false-green risk the prior round's
+accountability report said to "watch for specifically" once drive scripts
+existed — and it has now materialized, in the first round they actually
+ran. Flagging it here rather than in `test-parity.md` alone because the
+*reporting mechanism itself*, not the widget code, is what's silently
+discarding the signal.
 
-The gate for this round already reports `drive_ok=false`, 0/0 checks. I
-verified independently (see `test-parity.md`) that this is not a
-pessimistic or broken gate: there is no `test/drive_*.rb` and no
-`spec/*_spec.rb` in the repository, so 0 checks is the true and only
-possible result. No report anywhere claims otherwise, so there is no false
-green on this axis this round — but the mechanism exists for one: had any
-report said "ported and verified" for a component with no executed
-check behind it, that would have been the most serious class of finding
-this skill looks for. Flagging this explicitly because the instructions
-asked that a failed or narrow drive run be treated as a parity gap in its
-own right, and because the *next* round is exactly where a drive script
-could be added that passes trivially (e.g. one that only checks `require`
-succeeds) and gets reported as parity restored when it is not — that
-risk should be watched for specifically when `test/drive_*.rb` is first
-added.
+> I ran the drive scripts, saw three RuntimeErrors fly past in the
+> output, and the number at the bottom still said "108 of 108 passed, 0
+> failed" — and that number is technically true for what it measures,
+> but calling the round's gate `drive_ok=true` without surfacing those
+> three errors anywhere in a report would have been a false green, so I
+> am writing them here instead of letting the headline number stand
+> alone.
+
+## Finding 3: the menu's dead items are reported as "deliberate," which is also where the excuse could hide
+
+`application.rb`'s drive script explicitly asserts `app.sources is
+deliberately absent, not wired to nothing` and `app.prefs is deliberately
+absent, not wired to nothing` as passing checks. Read generously, this is
+the opposite of excusing a gap — it's turning an omission into an
+assertion that fails loudly if someone wires the action without updating
+the menu, which is good practice. Read adversarially: calling an
+unported dialog's launcher action "deliberately absent" in a test
+assertion is doing exactly what this skill warns about — vocabulary that
+reads as a design decision rather than as an admission that
+`repos_dialog.rb` and `prefs_dialog.rb` don't exist yet. Nothing in
+`PORTING.md` (absent) or any commit message explains *why* it's
+deliberate beyond "not built yet," so "deliberately absent" currently
+means the same thing as "not ported," dressed up. Not scored as a
+violation (no literal excuse phrase, and `component-parity.md` already
+names the real gap plainly), but recorded because the pattern is worth
+watching before it spreads to more actions.
+
+## Runtime-gate false-green risk, checked directly, cross-round
+
+Last round's report predicted: *"the next round is exactly where a drive
+script could be added that passes trivially ... and gets reported as
+parity restored when it is not."* That did not happen the naive way —
+the drive scripts this round assert real, specific widget behavior
+(CSS-class swaps, fraction clamping, dialog content), not just "require
+succeeds." But the narrower, real version of that same risk did happen:
+see Finding 2. The prediction was right in kind, wrong only in which
+exact shortcut would be taken.
 
 ## Verdict
 
-Accountability is not clean. Two findings stand: (1) a gap admitted only
-in a code comment with no tracking artifact
-(`lib/gnome_software/application.rb:19`), and (2) a standing report
-(`component-inventory.md`) that went stale against the code it describes
-and was never corrected or marked superseded, which is a false-green risk
-by omission even though its original claims were accurate when written.
-Both are fixed by this round's new reports, but neither was caught before
-this audit asked for one.
+Accountability is not clean. Three findings: (1) `component-inventory.md`
+went stale a second time, after already being caught and "fixed" (by
+superseding it with fresh reports, not by stopping it from recurring)
+last round — this is the most serious of the three, because it shows the
+process fix from last round's finding did not actually hold; (2) the new
+runtime gate silently absorbs three confirmed `RuntimeError`s without
+counting them as failures, which is a false-green mechanism inside the
+gate's own design, now caught on the first round it could occur; (3)
+"deliberately absent" is currently indistinguishable from "not built
+yet" with no tracking artifact behind it, which is low-severity today but
+is the exact vocabulary shape this skill exists to catch before it
+spreads.

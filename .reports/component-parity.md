@@ -3,105 +3,133 @@
 Per `.claude/skills/component-parity`. Compares each identified port
 component against its upstream counterpart behavior-for-behavior, and
 checks every upstream window/dialog/page/menu item/shortcut/preference/
-action/empty-state/error-state exists in the port.
+action/empty-state/error-state exists in the port. Supersedes the prior
+round's `component-parity.md` (written when `drive_ok=false`, 0 checks);
+this round's gate is `drive_ok=true`, 108/108 checks, 17 components.
 
-## Verdict: not at parity. 72 of 80 upstream components have zero port
-presence, and every one of the 8 that do have partial, documented gaps.
+## Verdict: not at parity. 55 of 70 upstream component stems have zero port
+presence, and the runtime gate that passed only exercises the 15 that do.
 
 ## Windows, dialogs, pages
 
 - **Main window / shell (`gs-shell.c/.ui`):** NOT PORTED. `lib/shell.rb`
-  does not exist. `application.rb` substitutes a static `Adw::StatusPage`
-  ("Software" + icon) for the entire view-stack shell — no Explore/
-  Installed/Updates/Search pages, no page-switching, no header-bar search
-  entry, no back button, no network/metered-connection banners.
-- **All 10 top-level pages** (`overview`, `installed`, `updates`, `search`,
-  `details`, `category`, `extras`, `loading`, `app_details`, `os_update`):
-  NOT PORTED. Zero files.
-- **12 dialogs:** 2 of 12 ported (`error_dialog.rb`, `shortcuts_dialog.rb`).
-  10 NOT PORTED: prefs, repos, review, app-reviews, version-history,
-  update-details, translation, installed-updates, basic-auth, removal,
-  remove-app-confirm, dkms.
-- **5 context-dialog/row components:** NOT PORTED (0 of 5).
-- **6 rows, 6 tiles/cards, 15 composite widgets/sections:** NOT PORTED
-  (0 of 27).
-- **6 background/integration classes** (update monitor, shell-search
-  provider, D-Bus helper, offline-updates provider, language, vendor):
-  NOT PORTED (0 of 6). These have no widget tree but are user-facing
-  (notifications, GNOME Shell search integration) and are listed as gaps,
-  not out of scope, because nothing in `PORTING.md` or the inventory scopes
-  them out.
+  does not exist. `application.rb` still substitutes a static
+  `Adw::StatusPage` for the entire view-stack — no Explore/Installed/
+  Updates/Search pages, no page-switching, no header-bar search entry, no
+  back button, no network/metered-connection banners. This is unchanged
+  from the prior round despite 5 new widget files landing elsewhere.
+- **All 10 top-level pages:** NOT PORTED. Zero files. None of this round's
+  new widgets (`progress_button`, `context_dialog_row`, `review_bar`,
+  `description_box`, `updates_paused_banner`) is wired into any page,
+  because no page exists to host them — they are proven only against a
+  bare test host window in `test/drive_new_widgets.rb`, never against a
+  real details/updates page.
+- **17 dialogs:** 2 of 17 ported (`error_dialog.rb`, `shortcuts_dialog.rb`).
+  15 NOT PORTED, including `prefs` and `repos` (the two the port's own
+  `ACTIONS` table explicitly refuses to wire — see Actions, below).
+- **7 rows:** 1 of 7 ported (`context_dialog_row.rb`, new this round). 6
+  NOT PORTED: app-row, app-addon-row, origin-popover-row, repo-row,
+  review-row, app-version-history-row.
+- **5 tiles/cards:** 0 of 5 ported.
+- **≈22 composite widgets:** 7 of 22 ported this round and last
+  (`progress_button`, `review_bar`, `description_box`,
+  `updates_paused_banner`, `lozenge`, `toast`, `vendor`); 15 NOT PORTED
+  (`app-context-bar`, both carousels, `screenshot_image`,
+  `review_histogram`, `star_widget`, `star_image`, `license_tile`,
+  `update_list`, `updates_section`, `upgrade_banner`, `repos_section`,
+  `layout_manager`, `language` is ported so not counted here twice, `common`
+  and `page` are ported infra).
+- **4 background/integration classes:** NOT PORTED (0 of 4) — update
+  monitor, shell-search provider, D-Bus helper, offline-updates provider.
+  These are user-facing (desktop notifications, GNOME Shell search) and
+  not scoped out anywhere, so they remain live gaps.
 
 ## Menu items
 
-`lib/primary_menu.rb` ports the 2-section structure and both `hidden-when`
-items correctly, but of the 4 menu actions only 1 (`app.shortcuts`) is wired
-to working behavior in `application.rb`. `app.about` works. `app.sources`
-and `app.prefs` are *intentionally* absent (see application.rb comment) —
-so the menu items render but will never become clickable because no page
-ever registers those actions. That is a real-today gap, not a future one:
-the menu is permanently showing fewer live items than upstream's.
+Unchanged from last round: `lib/primary_menu.rb` ports the 2-section
+structure and both `hidden-when` items, but of the 4 menu actions only 1
+(`app.shortcuts`) plus `app.about` are wired to real behavior.
+`app.sources`/`app.prefs` are *deliberately* absent (the port's own drive
+script asserts this with `ok` lines, i.e. treats non-wiring as a verified
+design decision rather than a gap) — the menu items render but are
+permanently dead, because `repos_dialog.rb` and `prefs_dialog.rb` do not
+exist.
 
 ## Keyboard shortcuts
 
-Upstream `gs-shell.ui`'s `GtkShortcutController` binds 10 accelerators.
-`lib/shortcuts_dialog.rb` lists all 10 correctly as *documentation*, and
-`application.rb` wires only 2 of them for real (`<Control>question` →
-shortcuts dialog, `<Control>q` → quit). The other 8 (`<Alt>1/2/3`, `<Control>F`,
-`F10`, `<Control>comma`, `<Control>period`, `<Alt>F4`, `F5`/`<Control>r`) are
-listed in the dialog but do nothing when pressed, because there is no page
-stack, search bar, menu-button F10 trigger, prefs dialog, repos dialog, or
-update-refresh action for them to invoke. **The shortcuts dialog is lying to
-the user about what the app can do** — this is worse than omitting the
-dialog, because it is a false affirmative surface.
+Unchanged: `lib/shortcuts_dialog.rb` lists all 10 upstream accelerators as
+documentation; `application.rb` wires only 2 for real
+(`<Control>question`, `<Control>q`). The other 8 do nothing when pressed.
+The shortcuts dialog continues to assert capabilities the app does not
+have — still the single worst "false affirmative" surface identified.
 
 ## Preferences
 
-`gs-prefs-dialog.ui`'s 5 rows across 2 groups: NOT PORTED. `lib/settings.rb`
-holds the backing keys (`download-updates`, `download-updates-notify`,
-`allow-updates`, `show-only-free-apps`, `show-only-verified-apps`) but no
-`PrefsDialog` class or `app.prefs` action exists, so the preferences surface
-is completely unreachable from the running app.
+Unchanged: `gs-prefs-dialog.ui`'s 5 rows: NOT PORTED. `lib/settings.rb`
+holds the backing keys but no `PrefsDialog` class or `app.prefs` action
+exists.
 
 ## Actions
 
-Upstream registers ~24 app actions. The port's `ACTIONS` table in
-`application.rb` has 3 (`about`, `shortcuts`, `quit`). The other ~21
-(`verbose`, `nop`, `reboot-and-install`, `reboot`, `restart`, `shutdown`,
-`launch`, `show-offline-update-error`, `autoupdate`, `sources`, `prefs`,
-`set-mode`, `search`, `details`, `details-pkg`, `details-url`, `install`,
-`uninstall`, `filename`, `install-resources`, `show-metainfo`,
-`refresh-updates`) do not exist. Command-line options (`--mode`, `--search`,
-`--details`, etc.) are not handled anywhere in `exe/gnome-software`, which
-is a 3-line launcher with no `ARGV` handling at all.
+Upstream registers ~24 app actions. The port's `ACTIONS` table has 3
+(`about`, `shortcuts`, `quit`) — unchanged this round even though 5 new
+widget files landed; none of them touch `application.rb`'s action table.
+The other ~21 do not exist. `exe/gnome-software` still does not parse
+`ARGV` for any of upstream's CLI options (`--mode`, `--search`,
+`--details`, `--install`, etc.).
 
 ## Empty, loading and error states
 
-Of the 10 upstream empty/loading/error states cataloged, only the generic
-error dialog (`gs-utils-error-dialog-simple.ui` → `error_dialog.rb`) is
-ported. The 9 page-specific ones (no-results grids, spinners, EOL banner,
-translation banner, screenshot-unavailable fallback, desktop notifications
-for install/unavailable/reboot) do not exist, because the pages that would
-contain them do not exist.
+Unchanged: only the generic error dialog is ported. The 9 page-specific
+states remain unported because their host pages don't exist.
+
+## What changed, specifically, and how well it was verified
+
+- `ContextDialogRow`: importance→CSS-class mapping (`:warning` orange,
+  `:important` red) verified against `gs-context-dialog-row.c`'s actual
+  class names via `test/drive_new_widgets.rb` [1]. Matches.
+- `UpdatesPausedBanner`: single-reason vs. multi-reason (generic title +
+  Details button opening an `AlertDialog`) behavior matches
+  `gs-updates-paused-banner.c`'s collapsing logic, per the drive script.
+- `ProgressButton`: label/icon stack-switching and progress-CSS-class
+  toggling match `gs-progress-button.c`.
+- `ReviewBar`: fraction clamping to `[0, 1]` matches
+  `gs-review-bar.c`'s `gtk_widget_set_size_request` clamp.
+- `DescriptionBox`: collapse/expand on long text matches, but the drive
+  script itself hits `RuntimeError: widget produced no render node (not
+  realised yet?)` twice when screenshotting it (steps `[8]`/`[9]` labelled
+  "07-description-box-expanded failed") and once for the paused banner
+  (`05-updates-paused-single failed`) and once for the About dialog
+  (`02-about-dialog failed`). These failures are **not counted against the
+  108/0 pass count** — the drive scripts only count the explicit `ok`
+  assertions, so a widget that cannot be screenshotted (a real rendering
+  problem, not a harness bug — it happens on three different widgets across
+  two scripts) passes the gate silently. See `accountability-ensurance.md`
+  for why this is a false-green risk in the gate's own design, not just a
+  cosmetic nit.
 
 ## Behavioral deltas worth flagging even where "ported"
 
-- `Settings` deliberately swaps GSettings for a JSON file under
-  `XDG_CONFIG_HOME` — documented as a conscious deviation, not hidden, so
-  not counted as a gap in itself, but no migration/compat path from a real
-  GNOME install's existing gschema values is mentioned anywhere.
+- `Settings` still swaps GSettings for a JSON file under `XDG_CONFIG_HOME`
+  — documented, not hidden, but still no migration path from a real
+  install's existing gschema values.
 - `Toast` factory module correctly mirrors upstream's non-subclassable
-  `AdwToast` wrapper-function shape.
+  `AdwToast` wrapper-function shape (unchanged finding).
 
 ## Count
 
-- Upstream user-facing surfaces checked: 80 components + menu + 10
+- Upstream user-facing surfaces checked: 70 components + menu + 10
   shortcuts + preferences dialog + ~24 actions + 10 empty/error states.
 - At full parity: 0.
-- Partially ported with a real, non-trivial gap: 8 (error_dialog,
-  shortcuts_dialog [content vs behavior mismatch], primary_menu [2 of 4
-  items live], application.rb [3 of 24 actions, no CLI, no shell/pages],
-  settings, toast, common, page [unused base class]).
-- Not ported at all: 72 of 80 catalogued components, 21 of 24 actions, 8 of
-  10 keyboard shortcuts' actual behavior, the entire preferences dialog, 9
-  of 10 empty/error states.
+- Partially ported with a real, non-trivial gap: 15 (the stems listed
+  above under "Windows, dialogs, pages").
+- Not ported at all: 55 of 70 catalogued component stems, 21 of 24
+  actions, 8 of 10 keyboard shortcuts' actual behavior, the entire
+  preferences dialog, 9 of 10 empty/error states, 4 of 4 background
+  services.
+
+[1] `test/drive_new_widgets.rb` checks `window.first_child.css_classes`
+contains the expected class name string after setting `importance =`;
+it does not compare against a live upstream build, only against the
+class-name strings read from `gs-context-dialog-row.c`'s source during
+this audit.

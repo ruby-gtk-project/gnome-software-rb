@@ -1,76 +1,70 @@
 # Translation parity — gnome-software-rb vs origin/main
 
-Per `.claude/skills/translation-parity`.
+Per `.claude/skills/translation-parity`. Re-checked fresh this round
+against the current `lib/` (18 files, up from 10 last round); the
+underlying finding is unchanged and, if anything, has grown.
 
 ## Upstream
 
-`po/LINGUAS` lists 76 locales; `po/POTFILES.in` lists 135 source files
-whose `_()`/`N_()`/`C_()`/`ngettext()` call sites feed the `.pot` template
-that is compiled into per-locale `.mo` catalogues via gettext, domain
-`gnome-software`. The strings covered span the entire UI surface this
-audit's other four reports describe as unported: page titles, dialog
-labels, button text, toast messages, preference labels, shortcut
-descriptions, plural forms (e.g. app-count and update-count strings),
-and error messages.
+`po/LINGUAS` lists 76 locales. `po/POTFILES.in` lists 135 source files
+whose `_()`/`N_()`/`C_()`/`ngettext()` call sites feed the `.pot`
+template, gettext domain `gnome-software`. Measured directly off
+`po/de.po` this round: **1109 unique `msgid`s** (`grep '^msgid ' po/de.po
+| sort -u | wc -l`). The gschema itself adds no translatable strings
+(`summary`/`description` tags are build-time comments, not `_()`-wrapped
+at the GSettings layer); the UI strings are the 1109.
 
 ## Port
 
-- No `po/` directory exists anywhere in `gnome-software-rb` on `ruby`.
-- No `.pot` or `.po` file exists anywhere in the repository
-  (`find . -iname '*.pot' -o -iname '*.po'` → empty, git-tracked files
-  excluded).
-- No gettext dependency is declared: `gnome-software-rb.gemspec` has no
-  `gettext` runtime dependency, and `grep -n -i 'gettext\|i18n\|locale'`
-  across the gemspec and `Rakefile` returns nothing.
-- No `lib/*.rb` file requires `gettext`, `fast_gettext`, or
-  `GLib::I18n`, and none calls a translation function. Every user-facing
-  string in the 10 ported/partial files
-  (`error_dialog.rb`, `primary_menu.rb`, `settings.rb` [N/A — keys, not UI
-  strings], `shortcuts_dialog.rb`, `toast.rb`, `application.rb`) is a bare
-  Ruby string literal: `'Error Details'`, `'_Software Repositories'`,
-  `'_Preferences'`, `'Just now'`, `'Copy Details'`, `'Software'`, etc.
-  Several even keep the upstream `_` mnemonic-underline prefix verbatim
-  (`'_Software Repositories'`, `'_Preferences'` in `lib/primary_menu.rb`;
-  `'_Automatic'` etc. in the cataloged prefs-dialog rows) — those are
-  copied from the upstream label text, not run through any translation
-  call. Whether GTK4's menu-model consumer renders that leading
-  underscore as a mnemonic or as a literal character was not verified
-  here and needs a runtime check; either way, no gettext call processes
-  the string, which is the translation-parity gap this report tracks.
-- No Rake task extracts strings (`rake pot` is referenced only in a code
-  comment inside `flake.nix`, describing `rxgettext` as a *tool the dev
-  shell provides*, not a task this repo defines or runs: `grep -n pot
-  Rakefile` → nothing).
+- No `po/` directory exists anywhere on `ruby`. No `.pot`/`.po` file
+  exists anywhere in the repository.
+- No gettext dependency is declared in `gnome-software-rb.gemspec`; no
+  `gettext`/`fast_gettext`/`GLib::I18n` reference anywhere in `lib/`,
+  `exe/`, `Gemfile`, or `Rakefile`.
+- Checked every file added since the last round
+  (`progress_button.rb`, `context_dialog_row.rb`, `review_bar.rb`,
+  `description_box.rb`, `updates_paused_banner.rb`, `language.rb`,
+  `vendor.rb`, `system_info.rb`) in addition to the 10 already flagged:
+  **zero** of them calls a translation function either. User-facing
+  strings keep arriving as bare Ruby literals (`'Show _More'`/
+  `'Show _Less'` in `description_box.rb`, the paused-reasons title
+  strings in `updates_paused_banner.rb`, etc.), continuing the pattern
+  called out last round in `primary_menu.rb`/`error_dialog.rb`.
+- `description_box.rb`'s `'Show _More'`/`'Show _Less'` keep the upstream
+  mnemonic-underscore convention verbatim, same unresolved risk flagged
+  last round for `primary_menu.rb`: whether GTK4 renders that leading
+  underscore as a mnemonic or a literal character was not verified
+  either round, and it is now present in a second file.
+- No Rake task, script, or CI step extracts strings. `grep -rn
+  'gettext\|xgettext\|\.pot' Rakefile gemfiles/ 2>/dev/null` → nothing.
 
 ## Finding
 
-**0 of the upstream catalogue's msgids survive in the port, because there
-is no translation mechanism in the port at all — not a partial catalogue,
-not an English-only stub, nothing.** Every string the port does emit is
-hardcoded English with no extraction path and no locale switching.
+**0 of the upstream catalogue's 1109 msgids survive in the port.** Not a
+partial catalogue, not an English-only stub with extraction wired for
+later — there is no translation mechanism at all, and the gap has grown
+by 5 more hardcoded-string files since the last audit with no
+countervailing progress on gettext wiring in between.
 
 ## Severity
 
-This is total, not partial, non-parity. It is also compounding: every new
-widget file being written right now (`error_dialog.rb`, `primary_menu.rb`,
-`shortcuts_dialog.rb`, `application.rb`) is adding more hardcoded strings
-with no catalogue to backfill later, so the gap grows with every commit
-until gettext is wired in before, not after, the bulk of the UI is ported.
+Unchanged verdict, worse trend: every round that ports more UI without
+first wiring gettext makes the eventual retrofit larger. 5 new files
+landed this round, all adding more hardcoded English strings
+(`updates_paused_banner.rb`'s dynamic "Updates have been paused for N
+reasons"-shaped title included, which is also unported for the pluralized
+`ngettext` form upstream uses for its 1-vs-N-reasons case — see
+`component-parity.md`'s note on that banner's title logic; the Ruby port
+builds this string without any plural-form awareness, English or
+otherwise).
 
-## Required fix
+## Required fix (unchanged from last round, still outstanding)
 
-1. Add a gettext dependency (the project's own `ruby-gtk` skill / sibling
-   ports should be checked for the house convention — likely `gettext` or
-   `GLib::I18n` via gobject-introspection, since the app already loads
-   `gtk4`/`adwaita` through GI) and wrap every user-facing string already
-   in `lib/` with it, including the ones just listed.
-2. Create `po/POTFILES.in` pointing at those `lib/*.rb` files and a `rake
-   pot`/`rake po:update`-style task so a template can be generated as
-   components land, rather than retrofitted later.
-3. Verify how the mnemonic-underscore strings in `primary_menu.rb` render
-   today, and fix them if they show as a literal underscore, before more
-   files copy the same pattern.
+1. Add a gettext dependency and wrap every user-facing string already in
+   `lib/` — now 15 files' worth, up from 10.
+2. Create `po/POTFILES.in` and a `rake pot`/`rake po:update` task before,
+   not after, the remaining 55 unported components are written.
+3. Verify the mnemonic-underscore rendering for both
+   `primary_menu.rb` and `description_box.rb` in one pass.
 4. Decide and document a locale-copy story for upstream's 76 `po/*.po`
-   files (full carry-over, subset, or re-translation) — nothing in
-   `PORTING.md` (which does not exist) or `README.md` currently states
-   this project's position.
+   files; `PORTING.md` still does not exist to hold that decision.
