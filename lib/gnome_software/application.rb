@@ -8,18 +8,16 @@ require_relative '../common'
 require_relative '../primary_menu'
 require_relative '../shortcuts_dialog'
 require_relative '../system_info'
+require_relative '../shell'
 
 module GnomeSoftware
   # The port's application shell, ported from upstream's src/gs-application.c
-  # / src/gs-application.h: the Gtk::Application, the main window's chrome
-  # (header bar, main menu, toast overlay) and the app-wide actions
+  # / src/gs-application.h: the Gtk::Application, the app-wide actions
   # (app.about, app.shortcuts, app.quit) upstream registers from its own
-  # ACTION_ENTRIES table.
-  #
-  # The page content (Explore/Installed/Updates and the rest of the view
-  # stack GsShell owns) is not ported yet, so the window shows an
-  # Adw::StatusPage in its place rather than a half-built page tree — see
-  # lib/shell.rb's entry in the component inventory for what replaces it.
+  # ACTION_ENTRIES table, and window lifecycle (window-state save/restore,
+  # narrow-width tracking). The window's own navigation chrome — header
+  # bar, view stack, back button, toast overlay, updates-paused banner —
+  # is lib/shell.rb's Shell, ported from src/gs-shell.c.
   #
   # House style (see .claude/skills/ruby-gtk): every widget is a memoized
   # method, all configuration lives in its `tap`, assembly happens only in
@@ -52,20 +50,16 @@ module GnomeSoftware
     def build
       app.tap do
         app.signal_connect('activate') do
-          window.tap { |win| win.content = toast_overlay }
+          window.tap { |win| win.content = shell.root }
 
-          toast_overlay.tap { |overlay| overlay.child = toolbar_view }
-
-          toolbar_view.tap do |view|
-            view.add_top_bar(header_bar)
-            view.content = status_page
-          end
-
-          header_bar.tap do |bar|
-            bar.pack_end(primary_menu_button)
-          end
+          shell.header_bar.tap { |bar| bar.pack_end(primary_menu_button) }
 
           window.signal_connect('close-request') { on_close_request }
+          window.signal_connect('notify::default-width') do
+            shell.update_narrow_for_width(window.default_width)
+          end
+
+          shell.restore_window_state(window)
 
           # Mirrors gs-loading-page.c's own read of this key: the first run
           # gets a 24h cache-age refresh once the plugin loader exists;
@@ -94,9 +88,7 @@ module GnomeSoftware
       end
     end
 
-    def toast_overlay = @toast_overlay ||= Adwaita::ToastOverlay.new
-    def toolbar_view = @toolbar_view ||= Adwaita::ToolbarView.new
-    def header_bar = @header_bar ||= Adwaita::HeaderBar.new
+    def shell = @shell ||= Shell.new
 
     def primary_menu_button
       @primary_menu_button ||= Gtk::MenuButton.new.tap do |btn|
@@ -104,16 +96,6 @@ module GnomeSoftware
         btn.tooltip_text = 'Main Menu'
         btn.menu_model = PrimaryMenu.build
         btn.add_css_class('image-button')
-      end
-    end
-
-    # Stands in for GsShell's view stack until the pages it switches between
-    # are ported; see the component inventory for what replaces this.
-    def status_page
-      @status_page ||= Adwaita::StatusPage.new.tap do |page|
-        page.title = 'Software'
-        page.icon_name = 'org.gnome.Software'
-        page.add_css_class('icon-dropshadow')
       end
     end
 
@@ -159,6 +141,9 @@ module GnomeSoftware
 
       def action_quit = app.quit
 
-      def on_close_request = false
+      def on_close_request
+        shell.save_window_state(window)
+        false
+      end
   end
 end

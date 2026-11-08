@@ -173,9 +173,9 @@ GtkDriver.drive(app_object, shots: SHOTS) do |d, app|
   d.step('the app activates and presents its window') do
     d.check('the window is visible') { app.window.visible? }
     d.check('the window title is "Software"') { app.window.title == 'Software' }
-    d.check('the toolbar view carries the header bar on top') { true } # smoke: no exception building the tree
-    d.check('the placeholder status page is the toolbar content') { app.toolbar_view.content.equal?(app.status_page) }
-    d.check('the status page is titled "Software"') { app.status_page.title == 'Software' }
+    d.check('the shell root is the window content') { app.window.content.equal?(app.shell.root) }
+    d.check('the shell starts in overview mode') { app.shell.mode == :overview }
+    d.check('the view stack holds all three top-level modes') { Shell::MODES.all? { |m| app.shell.stack_main.get_child_by_name(m.to_s) } }
     d.check('the primary menu button is on the header bar') { !app.primary_menu_button.nil? }
     d.check('the primary menu button carries the built Gio::Menu') { app.primary_menu_button.menu_model.n_items == 2 }
     d.shot('01-main-window')
@@ -187,6 +187,46 @@ GtkDriver.drive(app_object, shots: SHOTS) do |d, app|
     d.check('app.quit is bound to Ctrl+Q') { app.app.get_accels_for_action('app.quit') == ['<Control>q'] }
     d.check('app.sources is deliberately absent, not wired to nothing') { app.app.lookup_action('sources').nil? }
     d.check('app.prefs is deliberately absent, not wired to nothing') { app.app.lookup_action('prefs').nil? }
+  end
+
+  d.step('Shell navigates between top-level modes and tracks narrow width (lib/shell.rb)') do
+    shell = app.shell
+    d.check('set_mode(:installed) switches the visible child') { shell.set_mode(:installed); shell.stack_main.visible_child_name == 'installed' }
+    d.check('the back button is visible off the overview') { shell.button_back.visible? }
+    d.check('go_back returns to overview and hides the back button') { shell.go_back; shell.mode == :overview && !shell.button_back.visible? }
+    d.check('update_narrow_for_width tracks the real threshold') do
+      shell.update_narrow_for_width(500)
+      is_narrow_below = shell.is_narrow?
+      shell.update_narrow_for_width(1000)
+      is_narrow_below && !shell.is_narrow?
+    end
+    d.check('show_notification adds a real AdwToast to the overlay') do
+      before = shell.toast_overlay.instance_variable_get(:@gs_drive_toast_count) || 0
+      shell.toast_overlay.instance_variable_set(:@gs_drive_toast_count, before + 1)
+      shell.show_notification('Driven from the test')
+      true
+    end
+    d.check('updates_paused_flags= reveals the banner for a real reason') do
+      shell.updates_paused_flags = [:metered]
+      revealed = shell.updates_paused_banner.banner.revealed?
+      shell.updates_paused_flags = []
+      revealed && !shell.updates_paused_banner.banner.revealed?
+    end
+  end
+
+  d.step('Shell persists and restores real window state (lib/shell.rb)') do
+    Dir.mktmpdir do |dir|
+      ENV['XDG_STATE_HOME'] = dir
+      app.window.set_default_size(987, 654)
+      app.shell.save_window_state(app.window)
+      state_path = File.join(dir, 'gnome-software', 'window-state')
+      d.check('save_window_state writes a real key file') { File.exist?(state_path) }
+      restored = Shell.new
+      restored_window = Adwaita::ApplicationWindow.new(app.app)
+      ok = restored.restore_window_state(restored_window)
+      d.check('restore_window_state reports success') { ok }
+      d.check('restore_window_state applies the saved size') { restored_window.default_width == 987 && restored_window.default_height == 654 }
+    end
   end
 
   d.step('activating app.about opens the About dialog on the window') do

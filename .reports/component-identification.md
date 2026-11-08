@@ -92,3 +92,22 @@ shell that every page depends on for navigation.
   GSettings), 3 of ~24 actions wired, 2 of 10 shortcuts wired for real
   behavior, 0 preferences UI, 0 msgids translated.
 - **55 of 70 components (79%) do not exist in `lib/` in any form.**
+
+## Round 2 addendum (commit porting lib/shell.rb)
+
+`src/gs-shell.c/h` now has a port, `lib/shell.rb`: the mode enum
+(overview/installed/updates), the Adw.ViewStack + view-switcher title,
+back-button navigation, the updates-paused banner and toast overlay, and
+window-state save/restore (`gs_shell_save_window_state` /
+`gs_shell_restore_window_state`), wired into `GnomeSoftware::Application` in
+place of the single hardcoded placeholder status page. The per-mode page
+*content* is still an `Adw::StatusPage` placeholder, documented in
+`lib/shell.rb`'s header comment, because the sub-pages it would host
+(overview/installed/updates pages) are not ported yet — those still count
+as missing components below. `.reports/component-inventory.md` is deleted
+per this file's own note that it superseded that stale snapshot; this file
+remains the single source of truth and should be updated again in the same
+commit as any future `lib/` addition.
+
+16 of 70 stems now present (23%), one more action closer to full navigation
+parity. Everything else in "Still entirely missing" below holds.
