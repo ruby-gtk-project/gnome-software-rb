@@ -96,16 +96,11 @@ Gem::Specification.new do |spec|
   spec.executables = ["gnome-software"]
   spec.require_paths = ["lib"]
 
-  # GTK4/Libadwaita toolkit
-  spec.add_dependency("gtk4")
   spec.add_dependency("adwaita")
-  spec.add_dependency("glib2")
-
-  # Backends and system integration. Each one is a GObject-Introspection
-  # loader generated from the GI typelib its README names (see flake.nix for
-  # the typelib each one needs at runtime).
   spec.add_dependency("appstream")       # AppStream — software metadata catalogue
   spec.add_dependency("flatpak")         # Flatpak — the Flatpak backend
+  spec.add_dependency("glib2")
+  spec.add_dependency("gtk4")
   spec.add_dependency("gudev")           # GUdev — hardware device info
   spec.add_dependency("libxmlb")         # Xmlb — the AppStream silo backing store
   spec.add_dependency("malcontent")      # Malcontent — parental controls
